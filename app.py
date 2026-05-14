@@ -1,3 +1,19 @@
+# ==============================================================================
+# COMANDOS DE TERMINAL (COPIE E COLE):
+# ------------------------------------------------------------------------------
+# 1. PARA RODAR O PAINEL LOCALMENTE:
+#    streamlit run app.py
+#
+# 2. PARA EXECUTAR O BACKEND (DEV BURGUER API):
+#    cd /c/dev_burguer_api
+#    pnpm dev
+#
+# 3. PARA SUBIR ALTERAÇÕES PARA O GITHUB:
+#    git add .
+#    git commit -m "ajustes no layout e filtros"
+#    git push origin master
+# ==============================================================================
+
 import streamlit as st
 import pandas as pd
 import psycopg2
@@ -12,10 +28,15 @@ st.set_page_config(
 )
 
 # =========================================
-# ESTILO PERSONALIZADO
+# ESTILO PERSONALIZADO (CSS)
 # =========================================
 st.markdown("""
 <style>
+/* REMOVE O TOPO (MENU, DEPLOY, GITHUB) E RODAPÉ */
+header {visibility: hidden;}
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+div.stDeployButton {display:none;}
 
 .stApp {
     background-color: #f4fff4;
@@ -27,12 +48,6 @@ st.markdown("""
     font-weight: bold;
     color: #146c2e;
     margin-top: 15px;
-}
-
-/* SUBTÍTULO */
-.subtitle {
-    font-size: 18px;
-    color: #4b4b4b;
 }
 
 /* CARDS */
@@ -64,36 +79,20 @@ section[data-testid="stSidebar"] {
 section[data-testid="stSidebar"] * {
     color: white;
 }
-
-/* TABELA */
-[data-testid="stDataFrame"] {
-    border-radius: 15px;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
 # =========================================
-# TOPO
+# TOPO DO PAINEL
 # =========================================
 col_logo, col_titulo = st.columns([1, 5])
 
 with col_logo:
-    st.image(
-        "https://cdn-icons-png.flaticon.com/512/628/628324.png",
-        width=100
-    )
+    st.image("https://cdn-icons-png.flaticon.com/512/628/628324.png", width=100)
 
 with col_titulo:
-    st.markdown(
-        '<p class="main-title">Painel Consolidado ATEG</p>',
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        '<p class="subtitle">Indicadores gerais de técnicos, projetos e atividades</p>',
-        unsafe_allow_html=True
-    )
+    st.markdown('<p class="main-title">Painel Consolidado ATEG</p>', unsafe_allow_html=True)
+    st.markdown('<p style="color:#4b4b4b;">Indicadores gerais de técnicos, projetos e atividades</p>', unsafe_allow_html=True)
 
 st.divider()
 
@@ -111,140 +110,51 @@ conn = psycopg2.connect(
 # =========================================
 # CONSULTA SQL
 # =========================================
-query = """
-SELECT
-    supervisor_atual,
-    tecnico,
-    projeto,
-    atividade
-FROM public.mapa_consolidado_ateg
-"""
-
+query = "SELECT supervisor_atual, tecnico, projeto, atividade FROM public.mapa_consolidado_ateg"
 df = pd.read_sql(query, conn)
-
 conn.close()
 
 # =========================================
-# KPIs
-# =========================================
-total_tecnicos = df["tecnico"].nunique()
-total_projetos = df["projeto"].nunique()
-total_supervisores = df["supervisor_atual"].nunique()
-total_atividades = df["atividade"].nunique()
-
-# =========================================
-# CARDS KPI
+# KPIs E CARDS
 # =========================================
 col1, col2, col3, col4 = st.columns(4)
+metrics = [
+    ("👨‍🌾 Técnicos", df["tecnico"].nunique()),
+    ("📁 Projetos", df["projeto"].nunique()),
+    ("👨‍💼 Supervisores", df["supervisor_atual"].nunique()),
+    ("🐄 Atividades", df["atividade"].nunique())
+]
 
-with col1:
-    st.markdown(f"""
-    <div class="card">
-        <div class="card-title">👨‍🌾 Técnicos</div>
-        <div class="card-value">{total_tecnicos}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col2:
-    st.markdown(f"""
-    <div class="card">
-        <div class="card-title">📁 Projetos</div>
-        <div class="card-value">{total_projetos}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col3:
-    st.markdown(f"""
-    <div class="card">
-        <div class="card-title">👨‍💼 Supervisores</div>
-        <div class="card-value">{total_supervisores}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col4:
-    st.markdown(f"""
-    <div class="card">
-        <div class="card-title">🐄 Atividades</div>
-        <div class="card-value">{total_atividades}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.write("")
-st.write("")
+for col, (label, value) in zip([col1, col2, col3, col4], metrics):
+    with col:
+        st.markdown(f'<div class="card"><div class="card-title">{label}</div><div class="card-value">{value}</div></div>', unsafe_allow_html=True)
 
 # =========================================
-# SIDEBAR FILTROS
+# SIDEBAR FILTROS (INDEPENDENTES)
 # =========================================
 st.sidebar.title("🌱 Filtros")
 
-supervisor = st.sidebar.multiselect(
-    "Supervisor",
-    options=sorted(df["supervisor_atual"].dropna().unique())
-)
+supervisor = st.sidebar.multiselect("Supervisor", options=sorted(df["supervisor_atual"].dropna().unique()))
+projeto = st.sidebar.multiselect("Projeto", options=sorted(df["projeto"].dropna().unique()))
+atividade = st.sidebar.multiselect("Atividade", options=sorted(df["atividade"].dropna().unique()))
 
-projeto = st.sidebar.multiselect(
-    "Projeto",
-    options=sorted(df["projeto"].dropna().unique())
-)
-
-atividade = st.sidebar.multiselect(
-    "Atividade",
-    options=sorted(df["atividade"].dropna().unique())
-)
-
-# =========================================
-# FILTROS
-# =========================================
+# Lógica de filtragem
 df_filtrado = df.copy()
-
-if supervisor:
-    df_filtrado = df_filtrado[
-        df_filtrado["supervisor_atual"].isin(supervisor)
-    ]
-
-if projeto:
-    df_filtrado = df_filtrado[
-        df_filtrado["projeto"].isin(projeto)
-    ]
-
-if atividade:
-    df_filtrado = df_filtrado[
-        df_filtrado["atividade"].isin(atividade)
-    ]
+if supervisor: df_filtrado = df_filtrado[df_filtrado["supervisor_atual"].isin(supervisor)]
+if projeto: df_filtrado = df_filtrado[df_filtrado["projeto"].isin(projeto)]
+if atividade: df_filtrado = df_filtrado[df_filtrado["atividade"].isin(atividade)]
 
 # =========================================
-# GRÁFICO PROJETOS
+# VISUALIZAÇÕES
 # =========================================
 st.subheader("📊 Técnicos por Projeto")
+st.bar_chart(df_filtrado.groupby("projeto")["tecnico"].nunique().sort_values(ascending=False))
 
-grafico = (
-    df_filtrado.groupby("projeto")["tecnico"]
-    .nunique()
-    .sort_values(ascending=False)
-)
-
-st.bar_chart(grafico)
-
-# =========================================
-# TABELA
-# =========================================
 st.subheader("📋 Dados Consolidados")
-
-st.dataframe(
-    df_filtrado,
-    use_container_width=True,
-    height=500
-)
+st.dataframe(df_filtrado, use_container_width=True, height=500)
 
 # =========================================
 # RODAPÉ
 # =========================================
 st.divider()
-
-st.markdown("""
-<center>
-    <h4 style='color:#146c2e'>
-        🌱 Painel ATEG • Streamlit + PostgreSQL
-    </h4>
-</center>
-""", unsafe_allow_html=True)
+st.markdown("<center><h4 style='color:#146c2e'>🌱 Painel ATEG • Streamlit + PostgreSQL</h4></center>", unsafe_allow_html=True)
